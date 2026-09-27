@@ -47,7 +47,8 @@ export const ModePracticeArena: React.FC<PracticeArenaProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [twistNotification, setTwistNotification] = useState<any | null>(null);
 
-  const countries = ["USA", "GBR", "RUS", "CHN", "DZA", "GUY", "KOR", "SVN", "SLE"];
+  // 2026 Council members other than France (P5, then elected members)
+  const countries = ["USA", "GBR", "RUS", "CHN", "DNK", "GRC", "PAK", "PAN", "SOM", "BHR", "COL", "COD", "LVA", "LBR"];
 
   useEffect(() => {
     initSession();
@@ -399,7 +400,10 @@ export const ModePracticeArena: React.FC<PracticeArenaProps> = ({
                   <option value="CONTACT_USA">Bilateral Demarche: USA</option>
                   <option value="CONTACT_RUSSIA">Bilateral Demarche: Russia</option>
                   <option value="CONTACT_CHINA">Bilateral Demarche: China</option>
+                  <option value="CONSULT_A3">Consult A3 / AU Mediation Primacy</option>
+                  <option value="COORDINATE_EU">Coordinate E3 / EU Partners</option>
                   <option value="PROPOSE_CEASEFIRE">Propose Ceasefire</option>
+                  <option value="HUMANITARIAN_CORRIDOR">Propose Humanitarian Corridor</option>
                   <option value="DRAFT_RESOLUTION">Table Draft Resolution</option>
                   <option value="DRAFT_PRST">Draft Presidential Statement (PRST)</option>
                   <option value="THREATEN_VETO">Threaten Veto</option>

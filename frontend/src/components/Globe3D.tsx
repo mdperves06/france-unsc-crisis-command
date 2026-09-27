@@ -10,7 +10,9 @@ export const Globe3D: React.FC<GlobeProps> = ({ onSelectRegion, selectedRegion }
   const mountRef = useRef<HTMLDivElement>(null);
   // Keep the latest callback in a ref so the WebGL scene is built once, not on every parent render
   const onSelectRef = useRef(onSelectRegion);
-  onSelectRef.current = onSelectRegion;
+  useEffect(() => {
+    onSelectRef.current = onSelectRegion;
+  }, [onSelectRegion]);
 
   useEffect(() => {
     const currentMount = mountRef.current;

@@ -99,8 +99,8 @@ export const FranceCommandCenter: React.FC = () => {
           </div>
           <div className="space-y-1 text-[11px] text-slate-300">
             <div><span className="text-cyan-400 font-bold">P3 Core:</span> USA & United Kingdom</div>
-            <div><span className="text-purple-300 font-bold">European Pillars:</span> Slovenia, Greece, Denmark</div>
-            <div><span className="text-amber-400 font-bold">Key Swing Partners:</span> A3+1 African members</div>
+            <div><span className="text-purple-300 font-bold">European Pillars:</span> Denmark, Greece, Latvia</div>
+            <div><span className="text-amber-400 font-bold">Key Swing Partners:</span> A3 (Somalia, DRC, Liberia)</div>
             <div><span className="text-red-400 font-bold">Dialogue Adversary:</span> Russian Federation</div>
           </div>
         </div>

@@ -32,8 +32,7 @@ class DiplomaticMessageSchema(BaseModel):
     reaction_mood: str
     timestamp: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class SimulationWorldStateSchema(BaseModel):
     turn: int
@@ -53,8 +52,7 @@ class SimulationWorldStateSchema(BaseModel):
     summary_of_turn: Optional[str]
     timestamp: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class WhatIfBranchRequest(BaseModel):
     source_session_id: str

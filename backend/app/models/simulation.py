@@ -47,7 +47,7 @@ class SimulationWorldState(Base):
     # Country stances dictionary: { "USA": { stance: "SUPPORTIVE", trust: 80, coalition: "SUPPORT", demands: [...] }, ... }
     country_states = Column(JSON, default=dict)
     
-    # Coalitions: { "support": ["USA", "GBR"], "conditional": ["JPN", "KOR"], "undecided": [...], "opposed": ["RUS", "CHN"] }
+    # Coalitions: { "support": ["USA", "GBR"], "conditional": ["DNK", "SOM"], "undecided": [...], "opposed": ["RUS", "CHN"] }
     coalition_status = Column(JSON, default=dict)
     
     # Voting projection: { "yes": 9, "no": 2, "abstain": 4, "veto_threats": ["RUS"] }

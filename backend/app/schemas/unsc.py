@@ -13,8 +13,7 @@ class UNSCMemberSchema(BaseModel):
     has_veto: bool
     strategic_profile: Optional[Dict[str, Any]] = None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class UNSCPresidencySchema(BaseModel):
     year: int
@@ -23,8 +22,7 @@ class UNSCPresidencySchema(BaseModel):
     country_name: str
     signature_theme: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class UNSCVoteSchema(BaseModel):
     id: int
@@ -39,8 +37,7 @@ class UNSCVoteSchema(BaseModel):
     explanation_of_vote: Optional[str]
     source: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class UNSCResolutionSchema(BaseModel):
     id: int
@@ -59,5 +56,4 @@ class UNSCResolutionSchema(BaseModel):
     france_vote: str
     source_url: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

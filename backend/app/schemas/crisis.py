@@ -35,12 +35,11 @@ class CrisisScenarioSchema(BaseModel):
     deescalation_paths: List[str]
     is_custom_or_imported: bool
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class CrisisTrainStepRequest(BaseModel):
     scenario_id: str
-    current_step: int # 1 to 14
+    current_step: int = Field(ge=1, le=14)  # 14-step France Decision Framework
     user_answer: str
 
 class CrisisTrainStepResponse(BaseModel):

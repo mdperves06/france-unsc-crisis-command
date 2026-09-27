@@ -59,13 +59,13 @@ class CrisisEngineService:
                 {"code": "USA", "name": "United States", "role": "Security Guarantor"},
                 {"code": "RUS", "name": "Russian Federation", "role": "Strategic Partner to Regional Faction"},
                 {"code": "CHN", "name": "China", "role": "Economic Corridor Stakeholder"},
-                {"code": "DZA", "name": "Algeria", "role": "Regional & African Group Advocate"}
+                {"code": "SOM", "name": "Somalia", "role": "A3 & African Union Primacy Advocate"}
             ],
             actor_initial_stances={
                 "USA": "Demands immediate allied protection and counter-terror clauses.",
                 "RUS": "Insists on strict host-state sovereignty and cautions against Western Chapter VII mandates.",
                 "CHN": "Urges bilateral negotiation, restraint, and rejects punitive economic sanctions.",
-                "DZA": "Demands immediate humanitarian ceasefire and unhindered UN aid passage."
+                "SOM": "Demands immediate humanitarian ceasefire, unhindered UN aid passage and African Union-led mediation."
             },
             france_interest="Preserve regional peace architecture, prevent regional war, uphold international humanitarian law, safeguard French nationals, and sustain European strategic presence.",
             france_immediate_threat="Imminent collapse of humanitarian corridors and rapid military escalation triggering P5 confrontation.",
@@ -89,7 +89,7 @@ class CrisisEngineService:
             strategic_paths=[
                 {"path": "Humanitarian-First Fast Track (PRST/Resolution)", "tradeoff": "High consensus probability; delays military settlement."},
                 {"path": "Assertive Chapter VII Mandate with Allied P3 Support", "tradeoff": "Demonstrates decisive deterrence; high Russian veto risk."},
-                {"path": "Elected Member Bridge (A3+1 / E10 Co-Sponsorship)", "tradeoff": "Secures overwhelming 10+ votes; dilutes punitive enforcement."}
+                {"path": "Elected Member Bridge (A3 / E10 Co-Sponsorship)", "tradeoff": "Secures overwhelming 10+ votes; dilutes punitive enforcement."}
             ],
             escalation_paths=[
                 "Artillery strikes hit UN peacekeeper outpost",

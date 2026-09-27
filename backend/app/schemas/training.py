@@ -15,8 +15,7 @@ class CurriculumModuleSchema(BaseModel):
     sources: List[Dict[str, str]]
     unlocked: bool
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class LearningProfileSchema(BaseModel):
     user_id: str
@@ -45,8 +44,7 @@ class LearningProfileSchema(BaseModel):
     completed_scenarios_count: int
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class SpeechAnalysisRequest(BaseModel):
     speech_type: str # OPENING, MOD_CAUCUS, CRISIS_SPEECH, PRESS_STMT, EMERGENCY

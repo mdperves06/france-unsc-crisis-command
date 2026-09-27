@@ -9,6 +9,152 @@ from app.schemas.ai import LLMMessage
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# 2026 UN Security Council roster used by the vote calculus
+# ---------------------------------------------------------------------------
+UNSC_P5 = ["CHN", "FRA", "RUS", "GBR", "USA"]
+UNSC_ELECTED_2026 = ["DNK", "GRC", "PAK", "PAN", "SOM", "BHR", "COL", "COD", "LVA", "LBR"]
+UNSC_MEMBERS_2026 = UNSC_P5 + UNSC_ELECTED_2026
+
+A3_MEMBERS = ["SOM", "COD", "LBR"]        # African members (no Caribbean "+1" in 2026)
+EU_MEMBERS = ["DNK", "GRC", "LVA"]        # Elected EU partners for E3/EU coordination
+OIC_MEMBERS = ["PAK", "BHR"]              # OIC / Arab Group voices
+GRULAC_MEMBERS = ["PAN", "COL"]
+
+# Leaning toward France's draft, 0-100 (persisted per member in country_states["leaning"]).
+#   >= 65 SUPPORT | 45-64 CONDITIONAL | 30-44 UNDECIDED | < 30 OPPOSED
+# Projected vote: NO if OPPOSED, YES if leaning >= 55, otherwise ABSTAIN.
+INITIAL_LEANINGS_2026 = {
+    "USA": 75, "GBR": 80, "RUS": 20, "CHN": 48,
+    "DNK": 55, "GRC": 55, "LVA": 52,
+    "PAK": 40, "BHR": 42, "PAN": 45, "COL": 45,
+    "SOM": 45, "COD": 48, "LBR": 45,
+}
+YES_THRESHOLD = 55
+
+# Deterministic effect of each France action on member leanings.
+# Keys are member codes or blocs ("A3", "EU", "OIC", "GRULAC", "ELECTED" = all ten elected).
+ACTION_LEANING_EFFECTS: Dict[str, Dict[str, int]] = {
+    # Consultative / de-escalatory
+    "REQUEST_EMERGENCY_MEETING": {"ELECTED": 4, "CHN": 3, "RUS": 2},
+    "PROPOSE_CEASEFIRE": {"A3": 8, "OIC": 6, "GRULAC": 5, "EU": 4, "CHN": 5, "RUS": 4},
+    "HUMANITARIAN_CORRIDOR": {"A3": 8, "OIC": 6, "GRULAC": 5, "EU": 4, "CHN": 3, "RUS": 2},
+    "CONSULT_A3": {"A3": 14, "OIC": 3, "CHN": 3},
+    "COORDINATE_EU": {"EU": 12, "GBR": 4, "USA": 2, "RUS": -2},
+    "CONTACT_USA": {"USA": 5, "GBR": 3, "EU": 4, "RUS": -3},
+    "CONTACT_RUSSIA": {"RUS": 12, "CHN": 4, "PAK": 3, "LVA": -4},
+    "CONTACT_CHINA": {"CHN": 12, "RUS": 3, "PAK": 6, "BHR": 3, "A3": 3},
+    "DRAFT_PRST": {"ELECTED": 4, "CHN": 6, "RUS": 8},
+    "DRAFT_RESOLUTION": {"EU": 5, "USA": 3, "GBR": 3, "GRULAC": 3, "CHN": -2, "RUS": -4},
+    # Escalatory
+    "THREATEN_VETO": {"A3": -8, "OIC": -6, "GRULAC": -5, "EU": -3, "CHN": -8, "RUS": -10},
+    "UNILATERAL_STATEMENT": {"ELECTED": -5, "CHN": -5, "RUS": -5, "GBR": -3, "USA": -3},
+    "DEMAND_SANCTIONS": {"A3": -6, "OIC": -6, "GRULAC": -3, "EU": 2, "USA": 3, "GBR": 3, "CHN": -12, "RUS": -15},
+}
+ESCALATORY_ACTIONS = ["THREATEN_VETO", "UNILATERAL_STATEMENT", "DEMAND_SANCTIONS"]
+TARGET_ATTENTION_BONUS = 6   # a non-escalatory action addressed to a delegation warms it further
+REPEAT_ACTION_FACTOR = 0.5   # repeating last turn's move has diminishing diplomatic returns
+
+BLOCS = {"A3": A3_MEMBERS, "EU": EU_MEMBERS, "OIC": OIC_MEMBERS, "GRULAC": GRULAC_MEMBERS, "ELECTED": UNSC_ELECTED_2026}
+
+
+def coalition_from_leaning(leaning: int) -> str:
+    if leaning >= 65:
+        return "SUPPORT"
+    if leaning >= 45:
+        return "CONDITIONAL"
+    if leaning >= 30:
+        return "UNDECIDED"
+    return "OPPOSED"
+
+
+def ensure_2026_country_states(country_states: Dict[str, Any]) -> Dict[str, Any]:
+    """Returns country_states for the 14 non-French 2026 members, each with a numeric leaning.
+    Members missing from older saved states get their initial leaning; stale (non-2026) codes are dropped."""
+    states = {}
+    for code in UNSC_MEMBERS_2026:
+        if code == "FRA":
+            continue
+        c_data = dict(country_states.get(code, {}))
+        c_data.setdefault("leaning", INITIAL_LEANINGS_2026[code])
+        c_data.setdefault("stance", "CONDITIONAL")
+        c_data.setdefault("trust", 60)
+        c_data.setdefault("demands", [])
+        c_data["coalition"] = coalition_from_leaning(c_data["leaning"])
+        states[code] = c_data
+    return states
+
+
+def apply_action_to_leanings(country_states: Dict[str, Any], action_type: str, target: Optional[str],
+                             last_action_type: Optional[str] = None) -> None:
+    """Shifts member leanings in place according to ACTION_LEANING_EFFECTS."""
+    factor = REPEAT_ACTION_FACTOR if action_type == last_action_type else 1.0
+    deltas: Dict[str, int] = {}
+    for key, delta in ACTION_LEANING_EFFECTS.get(action_type, {}).items():
+        for code in BLOCS.get(key, [key]):
+            deltas[code] = deltas.get(code, 0) + int(delta * factor)
+    if target in country_states and action_type not in ESCALATORY_ACTIONS:
+        deltas[target] = deltas.get(target, 0) + TARGET_ATTENTION_BONUS
+
+    for code, delta in deltas.items():
+        if code in country_states:
+            leaning = max(0, min(100, country_states[code]["leaning"] + delta))
+            country_states[code]["leaning"] = leaning
+            country_states[code]["coalition"] = coalition_from_leaning(leaning)
+
+
+def compute_coalition_and_vote(country_states: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Article 27 calculus over all 15 members; each member is counted exactly once."""
+    support_list = ["FRA"]
+    conditional_list = []
+    opposed_list = []
+    undecided_list = []
+    yes_count, no_count, abstain_count = 1, 0, 0  # France votes for its own draft
+
+    for c_code in UNSC_MEMBERS_2026:
+        if c_code == "FRA":
+            continue
+        leaning = country_states[c_code]["leaning"]
+        coalition = coalition_from_leaning(leaning)
+        if coalition == "SUPPORT":
+            support_list.append(c_code)
+        elif coalition == "CONDITIONAL":
+            conditional_list.append(c_code)
+        elif coalition == "UNDECIDED":
+            undecided_list.append(c_code)
+        else:
+            opposed_list.append(c_code)
+
+        if coalition == "OPPOSED":
+            no_count += 1
+        elif leaning >= YES_THRESHOLD:
+            yes_count += 1
+        else:
+            abstain_count += 1
+
+    p5_veto_threats = [c for c in opposed_list if c in UNSC_P5]
+    has_p5_veto = bool(p5_veto_threats)
+    outcome_prediction = "WOULD PASS" if (yes_count >= 9 and not has_p5_veto) else ("VETO RISK" if has_p5_veto else "INSUFFICIENT VOTES")
+
+    return {
+        "coalition_status": {
+            "support": support_list,
+            "conditional": conditional_list,
+            "opposed": opposed_list,
+            "undecided": undecided_list
+        },
+        "projected_vote": {
+            "yes_estimate": yes_count,
+            "no_estimate": no_count,
+            "abstain_estimate": abstain_count,
+            "p5_veto_threats": p5_veto_threats,
+            "outcome_prediction": outcome_prediction,
+            "requires_9_votes": True,
+            "label": "SIMULATION ESTIMATE"
+        }
+    }
+
+
 class CrisisOrchestrator(BaseAgent):
     """
     AGENT 4 — CRISIS ORCHESTRATOR & SYNTHESIZER
@@ -59,30 +205,29 @@ class CrisisOrchestrator(BaseAgent):
             authority_rationale = "Veto can only be formally registered during substantive voting on a tabled draft resolution (Article 27(3))."
 
         # 2. Simulate Key Country Reactions via Agent 2
-        active_actors = ["USA", "GBR", "RUS", "CHN", "DZA"]
         country_reactions = {}
-        
-        # Primary targeted country
-        target = target_country if target_country in active_actors else "USA"
+        new_state["country_states"] = ensure_2026_country_states(new_state.get("country_states") or {})
+
+        # Primary targeted country (any 2026 Council member other than France)
+        target = target_country if target_country in new_state["country_states"] else "USA"
         primary_reaction = await self.country_agent.generate_reaction(
             country_code=target,
             crisis_context=scenario_context.get("initial_situation", ""),
             france_action_or_message=f"{action_type}: {str(details)}",
-            relationship_trust=new_state.get("country_states", {}).get(target, {}).get("trust", 70)
+            relationship_trust=new_state["country_states"][target].get("trust", 70)
         )
         country_reactions[target] = primary_reaction.model_dump()
 
-        # Update target country in state
-        if "country_states" not in new_state:
-            new_state["country_states"] = {}
-        
-        new_state["country_states"][target] = {
+        # Update target country in state. Its leaning is shifted by France's action in step 5;
+        # the agent's explicit support/opposition adds a small nudge on top.
+        reaction_nudge = 5 if primary_reaction.will_support else (-5 if primary_reaction.will_oppose else 0)
+        new_state["country_states"][target].update({
             "stance": primary_reaction.current_stance,
             "trust": 75 if primary_reaction.will_support else 55,
-            "coalition": "SUPPORT" if primary_reaction.will_support else ("OPPOSED" if primary_reaction.will_oppose else "CONDITIONAL"),
+            "leaning": max(0, min(100, new_state["country_states"][target]["leaning"] + reaction_nudge)),
             "demands": primary_reaction.demands,
             "latest_cable": primary_reaction.diplomatic_cable_response
-        }
+        })
 
         # 3. Simulate Russia/China counter-moves if not targeted
         if target != "RUS":
@@ -93,67 +238,32 @@ class CrisisOrchestrator(BaseAgent):
                 relationship_trust=45
             )
             country_reactions["RUS"] = rus_reaction.model_dump()
-            new_state["country_states"]["RUS"] = {
+            # Russia's counter-move updates its rhetoric; its vote leaning follows France's actions (step 5)
+            new_state["country_states"]["RUS"].update({
                 "stance": rus_reaction.current_stance,
                 "trust": 45,
-                "coalition": "OPPOSED" if rus_reaction.will_oppose else "CONDITIONAL",
                 "demands": rus_reaction.demands,
                 "latest_cable": rus_reaction.diplomatic_cable_response
-            }
+            })
 
         # 4. Update World State Metrics
         escalation_delta = 0
-        if action_type in ["REQUEST_EMERGENCY_MEETING", "PROPOSE_CEASEFIRE", "CONTACT_CHINA", "CONTACT_RUSSIA"]:
+        if action_type in ["REQUEST_EMERGENCY_MEETING", "PROPOSE_CEASEFIRE", "CONTACT_CHINA", "CONTACT_RUSSIA", "HUMANITARIAN_CORRIDOR", "CONSULT_A3"]:
             escalation_delta = -5
             new_state["diplomatic_tension"] = max(10, new_state.get("diplomatic_tension", 60) - 4)
             new_state["france_reputation"] = min(100, new_state.get("france_reputation", 75) + 3)
-        elif action_type in ["THREATEN_VETO", "UNILATERAL_STATEMENT", "DEMAND_SANCTIONS"]:
+        elif action_type in ESCALATORY_ACTIONS:
             escalation_delta = 8
             new_state["diplomatic_tension"] = min(100, new_state.get("diplomatic_tension", 60) + 7)
         
         new_state["escalation_level"] = max(10, min(100, new_state.get("escalation_level", 50) + escalation_delta))
 
         # 5. Compute Coalition & UNSC Voting Calculus
-        support_list = ["FRA"]
-        conditional_list = []
-        opposed_list = []
-        undecided_list = ["GUY", "KOR", "SVN", "SLE", "ECU", "JPN", "MLT", "MOZ", "CHE"]
-
-        for c_code, c_data in new_state.get("country_states", {}).items():
-            coalition = c_data.get("coalition")
-            if coalition == "SUPPORT":
-                if c_code not in support_list: support_list.append(c_code)
-            elif coalition == "OPPOSED":
-                if c_code not in opposed_list: opposed_list.append(c_code)
-            else:
-                if c_code not in conditional_list: conditional_list.append(c_code)
-            if c_code in undecided_list:
-                undecided_list.remove(c_code)
-
-        new_state["coalition_status"] = {
-            "support": support_list,
-            "conditional": conditional_list,
-            "opposed": opposed_list,
-            "undecided": undecided_list
-        }
-
-        # Projected Vote Math:
-        # Conditional members split: half lean YES, the rest abstain (each member counted once)
-        conditional_yes = len(conditional_list) // 2
-        yes_count = len(support_list) + conditional_yes
-        p5_veto_threats = [c for c in opposed_list if c in ["USA", "RUS", "CHN", "GBR"]]
-        has_p5_veto = bool(p5_veto_threats)
-        outcome_prediction = "WOULD PASS" if (yes_count >= 9 and not has_p5_veto) else ("VETO RISK" if has_p5_veto else "INSUFFICIENT VOTES")
-
-        new_state["projected_vote"] = {
-            "yes_estimate": yes_count,
-            "no_estimate": len(opposed_list),
-            "abstain_estimate": len(conditional_list) - conditional_yes + len(undecided_list),
-            "p5_veto_threats": p5_veto_threats,
-            "outcome_prediction": outcome_prediction,
-            "requires_9_votes": True,
-            "label": "SIMULATION ESTIMATE"
-        }
+        # France's action shifts the persisted member leanings deterministically: consultative and
+        # humanitarian moves win over elected members (A3 on humanitarian/AU primacy, EU partners on
+        # E3/EU coordination); escalatory moves push members toward abstention or opposition.
+        apply_action_to_leanings(new_state["country_states"], action_type, target, new_state.pop("last_action_type", None))
+        new_state.update(compute_coalition_and_vote(new_state["country_states"]))
 
         # 6. Inject dynamic events / twists (Section 27)
         twist_event = None
@@ -166,8 +276,8 @@ class CrisisOrchestrator(BaseAgent):
             }
         elif turn == 3:
             twist_event = {
-                "headline": "A3+1 African Member States Coordinate Joint Communiqué",
-                "description": "Algeria and Sierra Leone request formal clause explicitly reaffirming African Union conflict mediation primacy before voting YES.",
+                "headline": "A3 African Member States Coordinate Joint Communiqué",
+                "description": "Somalia, the Democratic Republic of the Congo and Liberia request a formal clause explicitly reaffirming African Union conflict mediation primacy before voting YES.",
                 "source_type": "SIMULATION",
                 "impact": "Crucial swing vote leverage opened"
             }

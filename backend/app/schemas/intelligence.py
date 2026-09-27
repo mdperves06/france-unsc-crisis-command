@@ -17,8 +17,7 @@ class IntelligenceSourceSchema(BaseModel):
     confidence_score: float
     summary: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class NewsClusterSchema(BaseModel):
     id: int
@@ -32,8 +31,7 @@ class NewsClusterSchema(BaseModel):
     france_relevance_notes: Optional[str]
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class GlobalAlertSchema(BaseModel):
     id: int
@@ -47,8 +45,7 @@ class GlobalAlertSchema(BaseModel):
     timestamp: datetime
     active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class RegionCommandProfileSchema(BaseModel):
     id: int
@@ -67,5 +64,4 @@ class RegionCommandProfileSchema(BaseModel):
     key_resolutions: List[str]
     coordinates: Dict[str, float]
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

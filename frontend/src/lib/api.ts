@@ -28,9 +28,24 @@ export function getAuthHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// Every backend call goes through here so the session token is always attached.
+// A 401 while holding a token means the session expired: drop it and return to login.
+async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const hadToken = !!getToken();
+  const res = await fetch(url, {
+    ...init,
+    headers: { ...getAuthHeaders(), ...(init.headers as Record<string, string> | undefined) },
+  });
+  if (res.status === 401 && hadToken) {
+    clearToken();
+    window.location.reload();
+  }
+  return res;
+}
+
 // ── Auth API ──────────────────────────────────────────────────
 export async function authLogin(email: string, password: string) {
-  const res = await fetch(`${API_BASE}/auth/login`, {
+  const res = await apiFetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -52,7 +67,7 @@ export async function authRegister(payload: {
   password: string;
   country_assignment?: string;
 }) {
-  const res = await fetch(`${API_BASE}/auth/register`, {
+  const res = await apiFetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -68,7 +83,7 @@ export async function authRegister(payload: {
 }
 
 export async function authGetMe() {
-  const res = await fetch(`${API_BASE}/auth/me`, {
+  const res = await apiFetch(`${API_BASE}/auth/me`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Not authenticated");
@@ -76,7 +91,7 @@ export async function authGetMe() {
 }
 
 export async function authStatus() {
-  const res = await fetch(`${API_BASE}/auth/status`, {
+  const res = await apiFetch(`${API_BASE}/auth/status`, {
     headers: getAuthHeaders(),
   });
   return res.json();
@@ -89,43 +104,43 @@ export function authLogout(): void {
 
 
 export async function fetchUNSCMembers(year: number = 2026) {
-  const res = await fetch(`${API_BASE}/unsc/members?year=${year}`);
+  const res = await apiFetch(`${API_BASE}/unsc/members?year=${year}`);
   return res.json();
 }
 
 export async function fetchUNSCPresidencies(year: number = 2026) {
-  const res = await fetch(`${API_BASE}/unsc/presidencies?year=${year}`);
+  const res = await apiFetch(`${API_BASE}/unsc/presidencies?year=${year}`);
   return res.json();
 }
 
 export async function fetchUNSCResolutions() {
-  const res = await fetch(`${API_BASE}/unsc/resolutions`);
+  const res = await apiFetch(`${API_BASE}/unsc/resolutions`);
   return res.json();
 }
 
 export async function fetchUNSCVotes() {
-  const res = await fetch(`${API_BASE}/unsc/votes`);
+  const res = await apiFetch(`${API_BASE}/unsc/votes`);
   return res.json();
 }
 
 export async function fetchIntelligenceSources(region?: string) {
   const url = region ? `${API_BASE}/intelligence/sources?region=${encodeURIComponent(region)}` : `${API_BASE}/intelligence/sources`;
-  const res = await fetch(url);
+  const res = await apiFetch(url);
   return res.json();
 }
 
 export async function fetchGlobalAlerts() {
-  const res = await fetch(`${API_BASE}/intelligence/alerts`);
+  const res = await apiFetch(`${API_BASE}/intelligence/alerts`);
   return res.json();
 }
 
 export async function fetchRegions() {
-  const res = await fetch(`${API_BASE}/intelligence/regions`);
+  const res = await apiFetch(`${API_BASE}/intelligence/regions`);
   return res.json();
 }
 
 export async function fetchRegionProfile(regionId: string) {
-  const res = await fetch(`${API_BASE}/intelligence/regions/${regionId}`);
+  const res = await apiFetch(`${API_BASE}/intelligence/regions/${regionId}`);
   if (!res.ok) throw new Error(`Region '${regionId}' not found`);
   return res.json();
 }
@@ -135,7 +150,7 @@ export async function generateCrisis(params: {
   crisis_type: string;
   difficulty: string;
 }) {
-  const res = await fetch(`${API_BASE}/crisis/generate`, {
+  const res = await apiFetch(`${API_BASE}/crisis/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -148,7 +163,7 @@ export async function submitTrainStep(params: {
   current_step: number;
   user_answer: string;
 }) {
-  const res = await fetch(`${API_BASE}/crisis/train-step`, {
+  const res = await apiFetch(`${API_BASE}/crisis/train-step`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -157,19 +172,19 @@ export async function submitTrainStep(params: {
 }
 
 export async function triggerPanicBreakdown(scenarioId: string) {
-  const res = await fetch(`${API_BASE}/crisis/panic?scenario_id=${scenarioId}`, {
+  const res = await apiFetch(`${API_BASE}/crisis/panic?scenario_id=${scenarioId}`, {
     method: "POST",
   });
   return res.json();
 }
 
 export async function fetchHint(level: number) {
-  const res = await fetch(`${API_BASE}/crisis/hints/${level}`);
+  const res = await apiFetch(`${API_BASE}/crisis/hints/${level}`);
   return res.json();
 }
 
 export async function startPracticeSession(scenarioId: string, difficulty: string = "Intermediate") {
-  const res = await fetch(`${API_BASE}/practice/start`, {
+  const res = await apiFetch(`${API_BASE}/practice/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scenario_id: scenarioId, difficulty }),
@@ -184,7 +199,7 @@ export async function executePracticeAction(params: {
   parameters?: any;
   rationale?: string;
 }) {
-  const res = await fetch(`${API_BASE}/practice/action`, {
+  const res = await apiFetch(`${API_BASE}/practice/action`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -197,7 +212,7 @@ export async function sendNegotiateMessage(params: {
   recipient_country: string;
   content: string;
 }) {
-  const res = await fetch(`${API_BASE}/practice/negotiate`, {
+  const res = await apiFetch(`${API_BASE}/practice/negotiate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -206,39 +221,39 @@ export async function sendNegotiateMessage(params: {
 }
 
 export async function fetchWorldState(sessionId: string) {
-  const res = await fetch(`${API_BASE}/practice/${sessionId}/world-state`);
+  const res = await apiFetch(`${API_BASE}/practice/${sessionId}/world-state`);
   return res.json();
 }
 
 export async function fetchMessages(sessionId: string) {
-  const res = await fetch(`${API_BASE}/practice/${sessionId}/messages`);
+  const res = await apiFetch(`${API_BASE}/practice/${sessionId}/messages`);
   return res.json();
 }
 
 export async function fetchTimeline(sessionId: string) {
-  const res = await fetch(`${API_BASE}/practice/${sessionId}/timeline`);
+  const res = await apiFetch(`${API_BASE}/practice/${sessionId}/timeline`);
   return res.json();
 }
 
 export async function triggerAfterActionReview(sessionId: string) {
-  const res = await fetch(`${API_BASE}/practice/${sessionId}/aar`, {
+  const res = await apiFetch(`${API_BASE}/practice/${sessionId}/aar`, {
     method: "POST",
   });
   return res.json();
 }
 
 export async function fetchCurriculum() {
-  const res = await fetch(`${API_BASE}/training/curriculum`);
+  const res = await apiFetch(`${API_BASE}/training/curriculum`);
   return res.json();
 }
 
 export async function fetchAnalytics() {
-  const res = await fetch(`${API_BASE}/analytics/metrics`);
+  const res = await apiFetch(`${API_BASE}/analytics/metrics`);
   return res.json();
 }
 
 export async function analyzeSpeech(speechType: string, speechText: string) {
-  const res = await fetch(`${API_BASE}/training/speech/analyze`, {
+  const res = await apiFetch(`${API_BASE}/training/speech/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ speech_type: speechType, speech_text: speechText }),
@@ -247,7 +262,7 @@ export async function analyzeSpeech(speechType: string, speechText: string) {
 }
 
 export async function validateResolution(title: string, preambles: string[], operatives: string[]) {
-  const res = await fetch(`${API_BASE}/training/resolution/validate`, {
+  const res = await apiFetch(`${API_BASE}/training/resolution/validate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -260,7 +275,7 @@ export async function validateResolution(title: string, preambles: string[], ope
 }
 
 export async function askAIDiplomat(prompt: string, persona: string = "FRANCE_COACH") {
-  const res = await fetch(`${API_BASE}/chat`, {
+  const res = await apiFetch(`${API_BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, persona }),
@@ -269,7 +284,7 @@ export async function askAIDiplomat(prompt: string, persona: string = "FRANCE_CO
 }
 
 export async function askEBQuestion(scenarioContext: string, position: string) {
-  const res = await fetch(`${API_BASE}/training/eb/question`, {
+  const res = await apiFetch(`${API_BASE}/training/eb/question`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scenario_context: scenarioContext, france_stated_position: position }),
@@ -278,7 +293,7 @@ export async function askEBQuestion(scenarioContext: string, position: string) {
 }
 
 export async function evaluateEBAnswer(context: string, question: string, answer: string) {
-  const res = await fetch(`${API_BASE}/training/eb/evaluate`, {
+  const res = await apiFetch(`${API_BASE}/training/eb/evaluate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scenario_context: context, eb_question: question, france_answer: answer }),

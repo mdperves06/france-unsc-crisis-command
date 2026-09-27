@@ -15,8 +15,9 @@ class RAGService:
     ) -> ResearchDocument:
         full_text = ""
         file_type = "TXT"
+        name = filename.lower()
 
-        if filename.endswith(".pdf"):
+        if name.endswith(".pdf"):
             file_type = "PDF"
             try:
                 import pypdf
@@ -25,7 +26,7 @@ class RAGService:
                     full_text += (page.extract_text() or "") + "\n"
             except Exception:
                 full_text = file_bytes.decode("utf-8", errors="ignore")
-        elif filename.endswith(".docx"):
+        elif name.endswith(".docx"):
             file_type = "DOCX"
             try:
                 import docx
@@ -56,7 +57,7 @@ class RAGService:
         db.commit()
         db.refresh(doc_record)
 
-        for idx, chunk in enumerate(chunks[:20]):
+        for idx, chunk in enumerate(chunks):
             chunk_rec = DocumentChunk(
                 document_id=doc_record.id,
                 chunk_index=idx,

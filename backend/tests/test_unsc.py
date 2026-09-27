@@ -1,13 +1,5 @@
 import sys
 import pytest
-sys.path.insert(0, 'backend')
-from app.main import app
-from fastapi.testclient import TestClient
-
-@pytest.fixture
-def client():
-    with TestClient(app) as c:
-        yield c
 
 def test_unsc_members_and_presidency(client):
     res = client.get("/api/v1/unsc/members?year=2026")

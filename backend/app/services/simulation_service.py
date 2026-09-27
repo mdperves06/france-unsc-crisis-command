@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from app.models.simulation import SimulationSession, SimulationWorldState, DiplomaticMessage, SimulationActionLog
 from app.models.crisis import CrisisScenario
-from app.ai.agents.orchestrator import CrisisOrchestrator
+from app.ai.agents.orchestrator import CrisisOrchestrator, ensure_2026_country_states, compute_coalition_and_vote
 
 class SimulationService:
     def __init__(self):
@@ -32,7 +32,15 @@ class SimulationService:
         db.add(session)
         db.commit()
 
-        # Initialize initial world state
+        # Initialize initial world state (2026 Council: P5 + 10 elected members)
+        initial_country_states = ensure_2026_country_states({
+            "USA": {"stance": "SUPPORTIVE", "trust": 80, "demands": ["Allied security guarantees"]},
+            "GBR": {"stance": "SUPPORTIVE", "trust": 85, "demands": ["E3 coordination"]},
+            "RUS": {"stance": "CRITICAL", "trust": 40, "demands": ["No sanctions or Chapter VII intervention"]},
+            "CHN": {"stance": "CAUTIOUS", "trust": 55, "demands": ["Protection of sovereign trade and dialogue"]},
+            "SOM": {"stance": "CONDITIONAL", "trust": 65, "demands": ["Immediate humanitarian relief without preconditions", "African Union mediation primacy"]}
+        })
+        initial_vote = compute_coalition_and_vote(initial_country_states)
         initial_world_state = SimulationWorldState(
             session_id=session_id,
             turn=1,
@@ -43,27 +51,9 @@ class SimulationService:
             economic_status="DISRUPTED",
             france_reputation=80,
             france_credibility=85,
-            country_states={
-                "USA": {"stance": "SUPPORTIVE", "trust": 80, "coalition": "SUPPORT", "demands": ["Allied security guarantees"]},
-                "GBR": {"stance": "SUPPORTIVE", "trust": 85, "coalition": "SUPPORT", "demands": ["E3 coordination"]},
-                "RUS": {"stance": "CRITICAL", "trust": 40, "coalition": "OPPOSED", "demands": ["No sanctions or Chapter VII intervention"]},
-                "CHN": {"stance": "CAUTIOUS", "trust": 55, "coalition": "CONDITIONAL", "demands": ["Protection of sovereign trade and dialogue"]},
-                "DZA": {"stance": "CONDITIONAL", "trust": 65, "coalition": "CONDITIONAL", "demands": ["Immediate humanitarian relief without preconditions"]}
-            },
-            coalition_status={
-                "support": ["FRA", "USA", "GBR"],
-                "conditional": ["CHN", "DZA", "GUY"],
-                "opposed": ["RUS"],
-                "undecided": ["KOR", "SVN", "SLE", "ECU", "JPN", "MLT", "MOZ", "CHE"]
-            },
-            projected_vote={
-                "yes_estimate": 6,
-                "no_estimate": 1,
-                "abstain_estimate": 8,
-                "p5_veto_threats": ["RUS"],
-                "outcome_prediction": "VETO RISK",
-                "label": "SIMULATION ESTIMATE"
-            },
+            country_states=initial_country_states,
+            coalition_status=initial_vote["coalition_status"],
+            projected_vote=initial_vote["projected_vote"],
             france_promises=[],
             france_concessions=[],
             draft_resolution_on_table={},
@@ -100,6 +90,10 @@ class SimulationService:
             "difficulty": session.difficulty
         }
 
+        last_action = db.query(SimulationActionLog).filter(
+            SimulationActionLog.session_id == session_id
+        ).order_by(SimulationActionLog.turn.desc()).first()
+
         # Latest world state
         latest_state_record = db.query(SimulationWorldState).filter(
             SimulationWorldState.session_id == session_id
@@ -116,6 +110,7 @@ class SimulationService:
             "economic_status": latest_state_record.economic_status if latest_state_record else "DISRUPTED",
             "france_promises": latest_state_record.france_promises if latest_state_record else [],
             "france_concessions": latest_state_record.france_concessions if latest_state_record else [],
+            "last_action_type": last_action.action_type if last_action else None,
             "country_states": latest_state_record.country_states if latest_state_record else {},
             "coalition_status": latest_state_record.coalition_status if latest_state_record else {},
             "projected_vote": latest_state_record.projected_vote if latest_state_record else {}

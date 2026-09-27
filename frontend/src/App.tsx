@@ -51,13 +51,16 @@ export function App() {
     setCurrentTab('world');
   }
 
+  // Intel profiles use long names ("Middle East & Levant"); the trainer's dropdown uses the short form
+  const toTrainerRegion = (regionName: string) => regionName.split(' & ')[0];
+
   const handleLaunchTraining = (regionName: string) => {
-    setActiveRegion(regionName);
+    setActiveRegion(toTrainerRegion(regionName));
     setCurrentTab('trainer');
   };
 
   const handleLaunchPractice = (regionName: string) => {
-    setActiveRegion(regionName);
+    setActiveRegion(toTrainerRegion(regionName));
     setCurrentTab('arena');
   };
 

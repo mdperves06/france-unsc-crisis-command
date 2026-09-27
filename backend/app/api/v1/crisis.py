@@ -39,7 +39,7 @@ async def emergency_panic_breakdown(scenario_id: str, db: Session = Depends(get_
         return await coach_agent.get_panic_breakdown(
             crisis_title="Maritime & Border Security Confrontation",
             crisis_summary="Hostilities have flared along the buffer corridor. Civilians are trapped and opposing military forces are mobilizing.",
-            actors=["USA", "Russia", "China", "Algeria"]
+            actors=["USA", "Russia", "China", "Somalia"]
         )
     return await coach_agent.get_panic_breakdown(
         crisis_title=scenario.title,

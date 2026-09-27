@@ -14,9 +14,9 @@ cd backend
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Configure AI provider
-# Copy and edit the .env file — add your GEMINI_API_KEY
-# (The .env file is already created — just add your API key)
+# Configure: copy the template, then add your GEMINI_API_KEY and a random SECRET_KEY
+cp .env.example .env
+# SECRET_KEY: python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 # Start the server
 python run.py
@@ -41,13 +41,16 @@ npm run dev
 
 ## 🔑 Configure Your Gemini API Key
 
-Edit `backend/.env` and replace `YOUR_GOOGLE_API_KEY_HERE`:
+Edit `backend/.env` (never commit it — it's in `.gitignore`) and replace `YOUR_GOOGLE_API_KEY_HERE`:
 
 ```
 GEMINI_API_KEY="your-actual-gemini-api-key"
 ```
 
 Get your key at: https://aistudio.google.com/app/apikey
+
+Without a key the app still runs, using offline fallback responses. If Gemini is overloaded (HTTP 429/503),
+requests are retried automatically before falling back.
 
 ---
 
@@ -58,6 +61,10 @@ Get your key at: https://aistudio.google.com/app/apikey
 | Email    | `admin@france-unsc.org`   |
 | Password | `admin123`                 |
 | Role     | Admin                      |
+
+> ⚠️ Change this password after first login (`POST /api/v1/auth/change-password`).
+> All API endpoints except `/api/v1/auth/*` require a logged-in user.
+> Self-registration can only create `student` or `delegate` accounts; `coach`/`admin` must be granted by an admin.
 
 ---
 
@@ -84,6 +91,17 @@ mun/
         ├── lib/api.ts     # API client with auth
         └── types/         # TypeScript types
 ```
+
+---
+
+## 🧪 Running Tests
+
+```bash
+# From the project root
+python -m pytest -q
+```
+
+Tests use a throwaway database and never call real AI providers, so they are fast and free.
 
 ---
 

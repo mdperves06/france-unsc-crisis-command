@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import httpx
@@ -6,6 +7,10 @@ from app.ai.providers.base import BaseAIProvider
 from app.schemas.ai import LLMMessage, LLMResponse
 
 logger = logging.getLogger(__name__)
+
+_MAX_ATTEMPTS = 3
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_THINKING_HEADROOM_TOKENS = 4096
 
 class GeminiProvider(BaseAIProvider):
     def __init__(self, model_name: str = "gemini-3.8-flash", api_key: str = "", **kwargs):
@@ -40,21 +45,29 @@ class GeminiProvider(BaseAIProvider):
             "contents": contents,
             "generationConfig": {
                 "temperature": temperature,
-                "maxOutputTokens": max_tokens
+                # Gemini 3 thinking tokens count against this limit; reserve room so answers aren't cut off
+                "maxOutputTokens": max_tokens + _THINKING_HEADROOM_TOKENS
             }
         }
 
         try:
             async with httpx.AsyncClient(timeout=45.0) as client:
-                # Key goes in a header, not the URL, so it never lands in logs or tracebacks
-                res = await client.post(endpoint, json=payload, headers={"x-goog-api-key": self.api_key})
-                if res.status_code == 200:
-                    data = res.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                        return LLMResponse(content=text, provider="gemini", model=self.model_name)
-                logger.warning(f"Gemini API returned status {res.status_code}: {res.text}")
+                for attempt in range(_MAX_ATTEMPTS):
+                    # Key goes in a header, not the URL, so it never lands in logs or tracebacks
+                    res = await client.post(endpoint, json=payload, headers={"x-goog-api-key": self.api_key})
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+                            return LLMResponse(content=text, provider="gemini", model=self.model_name)
+                        break
+                    logger.warning(f"Gemini API returned status {res.status_code} (attempt {attempt + 1}): {res.text[:300]}")
+                    # Overload / rate limit is usually brief; anything else won't fix itself
+                    if res.status_code not in _RETRYABLE_STATUS or attempt == _MAX_ATTEMPTS - 1:
+                        break
+                    await asyncio.sleep(2 ** attempt)
         except Exception as e:
             logger.warning(f"Gemini request failed: {e}")
 

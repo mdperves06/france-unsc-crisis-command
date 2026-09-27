@@ -1,13 +1,5 @@
 import sys
 import pytest
-sys.path.insert(0, 'backend')
-from app.main import app
-from fastapi.testclient import TestClient
-
-@pytest.fixture
-def client():
-    with TestClient(app) as c:
-        yield c
 
 def test_full_practice_arena_flow(client):
     # 1. Fetch benchmark scenario
@@ -112,3 +104,46 @@ def test_training_and_labs_endpoints(client):
     })
     assert eb_res.status_code == 200
     assert len(eb_res.json()["question"]) > 10
+
+
+def test_practice_unknown_session_returns_404(client):
+    assert client.post("/api/v1/practice/action", json={
+        "session_id": "missing", "action_type": "CONTACT_CHINA", "target_country": "CHN", "parameters": {}, "rationale": ""
+    }).status_code == 404
+    assert client.post("/api/v1/practice/negotiate", json={
+        "session_id": "missing", "recipient_country": "CHN", "content": "hello"
+    }).status_code == 404
+    assert client.post("/api/v1/practice/what-if", json={
+        "source_session_id": "missing", "target_turn": 1, "alternative_action_type": "PROPOSE_CEASEFIRE"
+    }).status_code == 404
+
+
+def test_practice_world_state_carries_over_between_turns(client):
+    # Unknown scenario id (the frontend default) falls back to a real scenario
+    session_id = client.post("/api/v1/practice/start", json={"scenario_id": "scenario-default"}).json()["session_id"]
+    before = client.get(f"/api/v1/practice/{session_id}/world-state").json()
+
+    res = client.post("/api/v1/practice/action", json={
+        "session_id": session_id, "action_type": "CONTACT_CHINA", "target_country": "CHN", "parameters": {}, "rationale": "Consult Beijing"
+    })
+    assert res.status_code == 200
+    vote = res.json()["updated_world_state"]["projected_vote"]
+    assert vote["yes_estimate"] + vote["no_estimate"] + vote["abstain_estimate"] == 15
+
+    after = client.get(f"/api/v1/practice/{session_id}/world-state").json()
+    assert after["turn"] == before["turn"] + 1
+    for field in ["france_credibility", "humanitarian_status", "economic_status"]:
+        assert after[field] == before[field]
+
+
+def test_research_upload_indexes_whole_document(client):
+    # 30k chars -> ~38 chunks; text near the end must still be searchable
+    body = ("Background on the Security Council. " * 800) + "UNIQUEMARKERXYZ closing annex."
+    res = client.post(
+        "/api/v1/research/upload",
+        files={"file": ("NOTES.TXT", body.encode(), "text/plain")},
+        data={"title": "Long briefing"},
+    )
+    assert res.status_code == 200 and res.json()["chunks"] > 20
+    hits = client.get("/api/v1/research/search", params={"query": "UNIQUEMARKERXYZ"}).json()
+    assert any(h["document_title"] == "Long briefing" for h in hits)

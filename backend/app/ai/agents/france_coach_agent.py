@@ -68,7 +68,7 @@ Teach trade-offs. Never say there is only one valid option.
                 "Table a draft resolution authorizing a humanitarian corridor and UN monitoring mechanism",
                 "Coordinate with the African Union or regional bodies under Chapter VIII"
             ],
-            who_matters=["USA (NATO ally, deterrence)", "Russia (P5 veto power)", "China (sovereignty advocate, trade corridors)", "A3+1 African elected members (swing votes)"],
+            who_matters=["USA (NATO ally, deterrence)", "Russia (P5 veto power)", "China (sovereignty advocate, trade corridors)", "A3 African elected members: Somalia, DRC, Liberia (swing votes)"],
             who_can_block=["Russia (veto threat on coercive mandates)", "China (veto threat on intrusive sovereignty violations)"],
             what_france_can_offer=[
                 "Phased humanitarian-first text without immediate Chapter VII sanctions",

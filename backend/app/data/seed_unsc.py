@@ -2,9 +2,71 @@ import datetime
 from sqlalchemy.orm import Session
 from app.models.unsc import UNSCMember, UNSCPresidency, UNSCResolution, UNSCVote, UNSCMeetingRecord, PeacekeepingMission
 
+# Verified 2026 Council: elected members serving their second year (term 2025-2026)
+# and newly elected members (term 2026-2027). P5 rows are seeded in _seed_base_data.
+ELECTED_2026_2027 = [
+    {"country_code": "BHR", "name": "Bahrain", "region_group": "Asia-Pacific", "doctrine": "Arab Group seat, Gulf maritime security, counter-terrorism, regional de-escalation."},
+    {"country_code": "COL", "name": "Colombia", "region_group": "GRULAC", "doctrine": "Peace-process implementation, transitional justice, UN verification missions."},
+    {"country_code": "COD", "name": "Democratic Republic of the Congo", "region_group": "African Group", "doctrine": "A3 coordination, sovereignty over eastern DRC, protection of civilians, MONUSCO transition."},
+    {"country_code": "LVA", "name": "Latvia", "region_group": "Eastern Europe", "doctrine": "EU and Baltic solidarity, territorial integrity, accountability for aggression, disinformation resilience."},
+    {"country_code": "LBR", "name": "Liberia", "region_group": "African Group", "doctrine": "A3 coordination, post-conflict peacebuilding, African Union peace architecture."},
+]
+
+# 2026 presidency rotation (English alphabetical order). Signature themes are left unset
+# because they are announced month by month; the database layer treats them as optional.
+PRESIDENCIES_2026 = [
+    (1, "SOM", "Somalia"),
+    (2, "GBR", "United Kingdom"),
+    (3, "USA", "United States"),
+    (4, "BHR", "Bahrain"),
+    (5, "CHN", "China"),
+    (6, "COL", "Colombia"),
+    (7, "COD", "Democratic Republic of the Congo"),
+    (8, "DNK", "Denmark"),
+    (9, "FRA", "France"),
+    (10, "GRC", "Greece"),
+    (11, "LVA", "Latvia"),
+    (12, "LBR", "Liberia"),
+]
+
 def seed_unsc_data(db: Session):
-    if db.query(UNSCMember).first():
-        return # Already seeded
+    if not db.query(UNSCMember).first():
+        _seed_base_data(db)
+    # Always run: idempotently corrects databases seeded with the stale 2026 roster.
+    sync_unsc_2026_roster(db)
+
+def sync_unsc_2026_roster(db: Session):
+    """Upsert the 2026-2027 elected members and the 2026 presidencies. Never deletes rows."""
+    changed = False
+    for m in ELECTED_2026_2027:
+        row = db.query(UNSCMember).filter(
+            UNSCMember.country_code == m["country_code"], UNSCMember.term_start == 2026
+        ).first()
+        if row is None:
+            db.add(UNSCMember(
+                country_code=m["country_code"], name=m["name"], status="ELECTED",
+                term_start=2026, term_end=2027, region_group=m["region_group"], has_veto=False,
+                strategic_profile={"doctrine": m["doctrine"]}
+            ))
+            changed = True
+        elif row.term_end != 2027 or row.name != m["name"] or row.region_group != m["region_group"]:
+            row.name, row.status, row.term_end, row.region_group, row.has_veto = m["name"], "ELECTED", 2027, m["region_group"], False
+            changed = True
+
+    for month, code, name in PRESIDENCIES_2026:
+        row = db.query(UNSCPresidency).filter(UNSCPresidency.year == 2026, UNSCPresidency.month == month).first()
+        if row is None:
+            db.add(UNSCPresidency(year=2026, month=month, country_code=code, country_name=name, signature_theme=None))
+            changed = True
+        elif row.country_code != code or row.country_name != name:
+            # The stored theme belonged to the wrong presiding country, so drop it.
+            row.country_code, row.country_name, row.signature_theme = code, name, None
+            changed = True
+
+    if changed:
+        db.commit()
+
+def _seed_base_data(db: Session):
 
     # 1. P5 & Elected Members
     members = [
@@ -31,16 +93,7 @@ def seed_unsc_data(db: Session):
     ]
     db.add_all(members)
 
-    # 2. Presidencies 2026
-    presidencies = [
-        UNSCPresidency(year=2026, month=1, country_code="FRA", country_name="France", signature_theme="Civilian Protection and Humanitarian Law in Modern Conflicts"),
-        UNSCPresidency(year=2026, month=2, country_code="GBR", country_name="United Kingdom", signature_theme="Maritime Security and Global Sea Lines of Communication"),
-        UNSCPresidency(year=2026, month=3, country_code="GRC", country_name="Greece", signature_theme="Peaceful Settlement of Maritime Disputes under UNCLOS"),
-        UNSCPresidency(year=2026, month=4, country_code="GUY", country_name="Guyana", signature_theme="Impact of Climate Change and Food Insecurity on Global Peace"),
-        UNSCPresidency(year=2026, month=5, country_code="PAK", country_name="Pakistan", signature_theme="Safety and Mandate Performance of UN Peacekeepers"),
-        UNSCPresidency(year=2026, month=6, country_code="PAN", country_name="Panama", signature_theme="Transnational Organized Crime and Regional Stability")
-    ]
-    db.add_all(presidencies)
+    # 2. Presidencies 2026 are upserted by sync_unsc_2026_roster()
 
     # 3. Benchmark Resolutions
     res1 = UNSCResolution(
